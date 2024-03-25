@@ -141,11 +141,12 @@ class ApplicationBuilder
         ?string $channels = null,
         ?string $pages = null,
         ?string $health = null,
+        ?string $domain = null,
         string $apiPrefix = 'api',
         ?callable $then = null)
     {
-        if (is_null($using) && (is_string($web) || is_string($api) || is_string($pages) || is_string($health)) || is_callable($then)) {
-            $using = $this->buildRoutingCallback($web, $api, $pages, $health, $apiPrefix, $then);
+        if (is_null($using) && (is_string($web) || is_string($api) || is_string($pages) || is_string($health)) || is_callable($then) || is_string($domain)) {
+            $using = $this->buildRoutingCallback($web, $api, $pages, $health, $apiPrefix, $domain, $then);
         }
 
         AppRouteServiceProvider::loadRoutesUsing($using);
@@ -168,24 +169,30 @@ class ApplicationBuilder
     /**
      * Create the routing callback for the application.
      *
-     * @param  string|null  $web
-     * @param  string|null  $api
-     * @param  string|null  $pages
-     * @param  string|null  $health
-     * @param  string  $apiPrefix
-     * @param  callable|null  $then
+     * @param string|null $web
+     * @param string|null $api
+     * @param string|null $pages
+     * @param string|null $health
+     * @param string $apiPrefix
+     * @param string|null $domain
+     * @param callable|null $then
      * @return \Closure
      */
     protected function buildRoutingCallback(?string $web,
-        ?string $api,
-        ?string $pages,
-        ?string $health,
-        string $apiPrefix,
-        ?callable $then)
+?string $api,
+?string $pages,
+?string $health,
+string $apiPrefix,
+?string $domain,
+?callable $then): Closure
     {
-        return function () use ($web, $api, $pages, $health, $apiPrefix, $then) {
-            if (is_string($api) && realpath($api) !== false) {
+        return function () use ($web, $api, $pages, $health, $apiPrefix, $then, $domain) {
+            if (is_string($api) && realpath($api) !== false && is_null($domain)) {
                 Route::middleware('api')->prefix($apiPrefix)->group($api);
+            }
+
+            if (is_string($api) && realpath($api) !== false && !is_null($domain) && is_string($domain)) {
+                Route::middleware('api')->domain($domain)->prefix($apiPrefix)->group($api);
             }
 
             if (is_string($health)) {
@@ -196,8 +203,12 @@ class ApplicationBuilder
                 });
             }
 
-            if (is_string($web) && realpath($web) !== false) {
+            if (is_string($web) && realpath($web) !== false && is_null($domain)) {
                 Route::middleware('web')->group($web);
+            }
+
+            if (is_string($web) && realpath($web) !== false && !is_null($domain) && is_string($domain)) {
+                Route::middleware('web')->domain($domain)->group($web);
             }
 
             if (is_string($pages) &&
@@ -274,7 +285,7 @@ class ApplicationBuilder
     protected function withCommandRouting(array $paths)
     {
         $this->app->afterResolving(ConsoleKernel::class, function ($kernel) use ($paths) {
-            $this->app->booted(fn () => $kernel->addCommandRoutePaths($paths));
+            $kernel->setCommandRoutePaths($paths);
         });
     }
 
